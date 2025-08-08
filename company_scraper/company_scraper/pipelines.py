@@ -10,27 +10,50 @@ class CompanyScraperPipeline:
 
 class TextWriterPipeline:
     def __init__(self):
-        self.file = None
+        self.files = {}  # Dictionary to hold file handles for each region
+        self.region_stats = {}  # Track stats per region
+        self.region_filenames = {
+            'Singapore': 'ncs_web_sg.txt',
+            'China': 'ncs_web_cn.txt',
+            'India': 'ncs_web_in.txt',
+            'Australia': 'ncs_web_au.txt'
+        }
     
     def open_spider(self, spider):
-        # Open the text file for writing when the spider starts
-        self.file = open('ncs_web_data.txt', 'w', encoding='utf-8')
-        # Write a header to the file
-        self.file.write("COMPANY WEBSITE SCRAPE RESULTS\n")
-        self.file.write("============================\n\n")
+        # Open separate files for each region
+        for region, filename in self.region_filenames.items():
+            self.files[region] = open(filename, 'w', encoding='utf-8')
+            # Write headers to each file
+            self.files[region].write(f"NCS {region.upper()} WEBSITE SCRAPE RESULTS\n")
+            self.files[region].write("=" * (len(f"NCS {region.upper()} WEBSITE SCRAPE RESULTS")) + "\n\n")
     
     def close_spider(self, spider):
-        # Close the file when the spider finishes
-        if self.file:
-            self.file.write(f"\nTotal pages scraped: {len(spider.visited_urls)}\n")
-            self.file.close()
+        # Close all files and write summaries
+        for region, file_handle in self.files.items():
+            if file_handle:
+                file_handle.write(f"\n{'='*80}\n")
+                file_handle.write("SCRAPE SUMMARY\n")
+                file_handle.write(f"{'='*80}\n")
+                pages_count = self.region_stats.get(region, 0)
+                file_handle.write(f"Total pages scraped for {region}: {pages_count}\n")
+                file_handle.close()
     
     def process_item(self, item, spider):
-        # Write each scraped item to the text file
-        self.file.write(f"URL: {item['url']}\n")
-        self.file.write(f"TITLE: {item['title']}\n")
-        self.file.write(f"DEPTH: {item['depth']}\n")
-        self.file.write("CONTENT:\n")
-        self.file.write(f"{item['content']}\n")
-        self.file.write("\n" + "-"*80 + "\n\n")  # Separator between items
+        # Track region statistics
+        region = item.get('region', 'Unknown')
+        self.region_stats[region] = self.region_stats.get(region, 0) + 1
+        
+        # Write to the appropriate regional file
+        if region in self.files:
+            file_handle = self.files[region]
+            file_handle.write(f"URL: {item['url']}\n")
+            file_handle.write(f"TITLE: {item['title']}\n")
+            file_handle.write(f"DEPTH: {item['depth']}\n")
+            file_handle.write("CONTENT:\n")
+            file_handle.write(f"{item['content']}\n")
+            file_handle.write("\n" + "-"*80 + "\n\n")  # Separator between items
+        else:
+            # Handle unknown regions by logging a warning
+            spider.logger.warning(f"Unknown region: {region} for URL: {item['url']}")
+            
         return item

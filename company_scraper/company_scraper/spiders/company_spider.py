@@ -4,8 +4,13 @@ from urllib.parse import urlparse
 
 class CompanySpider(scrapy.Spider):
     name = "ncs_web"
-    start_urls = ["https://www.ncs.co/"]
-    allowed_domains = ["www.ncs.co", "ncs.co"]
+    start_urls = [
+        "https://www.ncs.co/",           # Singapore/Global site
+        "https://www.ncs.com.cn/zh-cn",  # China site  
+        "https://www.ncs.co/en-in/",     # India site
+        "https://www.ncs.co/en-au/"      # Australia site
+    ]
+    allowed_domains = ["www.ncs.co", "ncs.co", "www.ncs.com.cn", "ncs.com.cn"]
     visited_urls = set()
     
     # List of different user agents to rotate through
@@ -20,7 +25,7 @@ class CompanySpider(scrapy.Spider):
     
     custom_settings = {
         'DEPTH_LIMIT': 4,
-        'DOWNLOAD_DELAY': 1,  # Increased delay
+        'DOWNLOAD_DELAY': 0.5,  # Increased delay
         'RANDOMIZE_DOWNLOAD_DELAY': 1,  # Random delay between 2-4 seconds
         'ROBOTSTXT_OBEY': False,
         'FEED_EXPORT_ENCODING': 'utf-8',
@@ -31,7 +36,7 @@ class CompanySpider(scrapy.Spider):
         # More realistic browser headers
         'DEFAULT_REQUEST_HEADERS': {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Language': 'en-US,en;q=0.9,zh-CN,zh;q=0.8,hi;q=0.7',  # Support for multiple languages
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
@@ -67,6 +72,17 @@ class CompanySpider(scrapy.Spider):
                 }
             )
 
+    def get_region_from_url(self, url):
+        """Identify the region based on the URL"""
+        if 'ncs.com.cn' in url:
+            return 'China'
+        elif '/en-in/' in url:
+            return 'India'
+        elif '/en-au/' in url:
+            return 'Australia'
+        else:
+            return 'Singapore'
+
     def parse(self, response):
         current_url = response.url
         
@@ -101,13 +117,14 @@ class CompanySpider(scrapy.Spider):
             ' '.join(page_paragraphs or [])
         ]).strip()
         
-        # Store the data
+        # Store the data with region information
         yield {
             'url': current_url,
             'title': page_title,
             'content': all_text,
             'depth': response.meta.get('depth', 0),
-            'status': response.status
+            'status': response.status,
+            'region': self.get_region_from_url(current_url)
         }
         
         # Find all links on the page
